@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, writeBatch, doc, updateDoc, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, onSnapshot, writeBatch, doc, updateDoc } from 'firebase/firestore';
 import { Activity, Globe, LogOut, CheckCircle, Clock, AlertCircle, Shield, Upload, Eye, Lock, UserPlus, Search, Download, RotateCcw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
@@ -54,7 +54,9 @@ const translations = {
     submitted: 'Evaluation Submitted',
     noTasks: 'No active evaluations assigned to your email.',
     unlockBtn: 'Unlock & Reset',
-    dir: 'ltr'
+    dir: 'ltr',
+    qsConsultant: { q1: 'Q1: Reports & Results', q2: 'Q2: Emergencies & Communication', q3: 'Q3: Knowledge & Productivity' },
+    qsTrainee: { q1: 'Q1: Mentorship & Guidance', q2: 'Q2: Communication & Respect', q3: 'Q3: Clinical Teaching Quality' }
   },
   ar: {
     title: 'نظام التقييم الطبي',
@@ -88,7 +90,9 @@ const translations = {
     submitted: 'تم الإرسال',
     noTasks: 'لا توجد تقييمات نشطة مخصصة لبريدك.',
     unlockBtn: 'إلغاء القفل وإعادة الضبط',
-    dir: 'rtl'
+    dir: 'rtl',
+    qsConsultant: { q1: 'س1: التقارير والنتائج', q2: 'س2: حالات الطوارئ والتواصل', q3: 'س3: المعرفة والإنتاجية' },
+    qsTrainee: { q1: 'س1: التوجيه والإرشاد', q2: 'س2: التواصل والاحترام', q3: 'س3: جودة التدريب السريري' }
   }
 };
 
@@ -96,11 +100,35 @@ const StatusBadge = ({ status }) => {
   const styles = { Completed: 'bg-green-100 text-green-700', Pending: 'bg-yellow-100 text-yellow-700', Missed: 'bg-red-100 text-red-700' };
   const icons = { Completed: <CheckCircle size={14} className="mx-1 shrink-0" />, Pending: <Clock size={14} className="mx-1 shrink-0" />, Missed: <AlertCircle size={14} className="mx-1 shrink-0" /> };
   return (
-    <span className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] sm:text-xs font-medium ${styles[status]}`}>
+    <span className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] sm:text-xs font-medium whitespace-nowrap ${styles[status]}`}>
       {icons[status]} <span className="truncate">{status}</span>
     </span>
   );
 };
+
+const ScoreSelector = ({ value, onChange }) => (
+  <div className="flex gap-2 sm:gap-3 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-start">
+    {[1, 2, 3, 4].map(v => (
+      <button
+        key={v}
+        onClick={() => onChange(v)}
+        className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl text-sm sm:text-base font-bold transition-all shadow-sm ${value === v ? 'bg-blue-600 text-white ring-2 ring-blue-600 ring-offset-1' : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'}`}
+      >
+        {v}
+      </button>
+    ))}
+  </div>
+);
+
+const ScoreViewer = ({ value }) => (
+  <div className="flex gap-2 sm:gap-3 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-start pointer-events-none">
+    {[1, 2, 3, 4].map(v => (
+      <div key={v} className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-sm sm:text-base font-bold ${value === v ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-50 text-gray-300 border border-gray-100'}`}>
+        {v}
+      </div>
+    ))}
+  </div>
+);
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -111,7 +139,7 @@ export default function App() {
   const [viewingResult, setViewingResult] = useState(null);
   const [activeTask, setActiveTask] = useState(null);
   const [lang, setLang] = useState('en');
-  const [scores, setScores] = useState({ q1: 50, q2: 50, q3: 50 });
+  const [scores, setScores] = useState({ q1: null, q2: null, q3: null });
   const [tasks, setTasks] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -128,7 +156,7 @@ export default function App() {
         const email = user.email.toLowerCase() || '';
         const name = user.displayName || email.split('@')[0];
         let role = 'user';
-        let title = 'Trainee';
+        let title = 'Staff';
 
         if (email.startsWith('admin')) {
           role = 'admin';
@@ -210,9 +238,6 @@ export default function App() {
         const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
 
         const batch = writeBatch(db);
-        const existingDocs = await getDocs(collection(db, 'tasks'));
-        existingDocs.forEach((d) => batch.delete(d.ref));
-        
         let currentConsultant = null;
         let currentDateStr = null;
 
@@ -285,14 +310,15 @@ export default function App() {
   };
 
   const submitEval = async () => {
-    if (!activeTask) return;
-    const avgScore = Math.round((scores.q1 + scores.q2 + scores.q3) / 3);
+    if (!activeTask || !scores.q1 || !scores.q2 || !scores.q3) return;
+    const totalRaw = scores.q1 + scores.q2 + scores.q3;
+    const avgScore = Math.round((totalRaw / 12) * 100);
     const taskRef = doc(db, 'tasks', activeTask.id);
     try {
       await updateDoc(taskRef, { status: 'Completed', score: avgScore, scoresDetail: scores });
       setShowModal(false);
       setActiveTask(null);
-      setScores({ q1: 50, q2: 50, q3: 50 });
+      setScores({ q1: null, q2: null, q3: null });
     } catch (e) {
       console.error(e);
     }
@@ -321,10 +347,10 @@ export default function App() {
       { header: 'Evaluatee', key: 'evaluatee', width: 30 },
       { header: 'Status', key: 'status', width: 15 },
       { header: 'Deadline', key: 'deadline', width: 25 },
-      { header: 'Overall Score', key: 'score', width: 15 },
-      { header: 'Q1: Self-Reflection', key: 'q1', width: 20 },
-      { header: 'Q2: Communication', key: 'q2', width: 20 },
-      { header: 'Q3: Clinical Skills', key: 'q3', width: 20 }
+      { header: 'Overall Score %', key: 'score', width: 18 },
+      { header: 'Q1 (1-4)', key: 'q1', width: 12 },
+      { header: 'Q2 (1-4)', key: 'q2', width: 12 },
+      { header: 'Q3 (1-4)', key: 'q3', width: 12 }
     ];
 
     sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -338,9 +364,9 @@ export default function App() {
         status: t.status,
         deadline: t.deadline,
         score: t.score !== undefined && t.score !== null ? `${t.score}%` : 'N/A',
-        q1: t.scoresDetail?.q1 !== undefined && t.scoresDetail?.q1 !== null ? `${t.scoresDetail.q1}%` : 'N/A',
-        q2: t.scoresDetail?.q2 !== undefined && t.scoresDetail?.q2 !== null ? `${t.scoresDetail.q2}%` : 'N/A',
-        q3: t.scoresDetail?.q3 !== undefined && t.scoresDetail?.q3 !== null ? `${t.scoresDetail.q3}%` : 'N/A'
+        q1: t.scoresDetail?.q1 !== undefined && t.scoresDetail?.q1 !== null ? t.scoresDetail.q1 : 'N/A',
+        q2: t.scoresDetail?.q2 !== undefined && t.scoresDetail?.q2 !== null ? t.scoresDetail.q2 : 'N/A',
+        q3: t.scoresDetail?.q3 !== undefined && t.scoresDetail?.q3 !== null ? t.scoresDetail.q3 : 'N/A'
       });
 
       const statusCell = row.getCell('status');
@@ -448,33 +474,33 @@ export default function App() {
         {viewingResult && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" dir="ltr">
             <div className="bg-white rounded-2xl w-full max-w-lg p-5 sm:p-6 shadow-2xl overflow-y-auto max-h-[90vh]">
-              <div className="flex justify-between items-start mb-4 sm:mb-6">
+              <div className="flex justify-between items-start mb-4 sm:mb-6 border-b border-gray-100 pb-4">
                 <div className="pr-4">
-                  <h2 className="text-lg sm:text-xl font-bold text-gray-900">Report</h2>
-                  <p className="text-xs sm:text-sm text-gray-500 break-all">From: {viewingResult?.type === 'trainee_to_consultant' ? viewingResult?.evaluatorEmail.split('@')[0] : viewingResult?.evaluator} <br/>To: {viewingResult?.evaluatee}</p>
+                  <h2 className="text-lg sm:text-xl font-bold text-gray-900">Report Details</h2>
+                  <p className="text-xs sm:text-sm text-gray-500 break-all mt-1">From: {viewingResult?.type === 'trainee_to_consultant' ? viewingResult?.evaluatorEmail.split('@')[0] : viewingResult?.evaluator} <br/>To: {viewingResult?.evaluatee}</p>
                 </div>
-                <div className="text-right shrink-0">
+                <div className="text-right shrink-0 bg-blue-50 px-4 py-2 rounded-xl">
                   <span className="text-2xl sm:text-3xl font-bold text-blue-600">{viewingResult?.score}%</span>
-                  <p className="text-[10px] sm:text-xs text-gray-500">Overall Score</p>
+                  <p className="text-[10px] sm:text-xs text-blue-600/80 font-medium">Overall Score</p>
                 </div>
               </div>
-              <div className="space-y-4 sm:space-y-6 mb-6 sm:mb-8 opacity-80 pointer-events-none">
-                <div>
-                  <div className="flex justify-between text-xs sm:text-sm mb-1 sm:mb-2"><span className="font-medium text-gray-700">Self-Reflection & Professionalism</span><span className="font-bold text-gray-900">{viewingResult?.scoresDetail?.q1 || 0}%</span></div>
-                  <input type="range" min="0" max="100" value={viewingResult?.scoresDetail?.q1 || 0} readOnly className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-lg appearance-none accent-blue-600" />
+              <div className="space-y-4 sm:space-y-5 mb-6 sm:mb-8">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-gray-50 rounded-xl">
+                  <span className="text-xs sm:text-sm font-medium text-gray-700">{viewingResult?.type === 'consultant_to_trainee' ? t.qsConsultant.q1 : t.qsTrainee.q1}</span>
+                  <ScoreViewer value={viewingResult?.scoresDetail?.q1} />
                 </div>
-                <div>
-                  <div className="flex justify-between text-xs sm:text-sm mb-1 sm:mb-2"><span className="font-medium text-gray-700">Patient Interaction & Communication</span><span className="font-bold text-gray-900">{viewingResult?.scoresDetail?.q2 || 0}%</span></div>
-                  <input type="range" min="0" max="100" value={viewingResult?.scoresDetail?.q2 || 0} readOnly className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-lg appearance-none accent-blue-600" />
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-gray-50 rounded-xl">
+                  <span className="text-xs sm:text-sm font-medium text-gray-700">{viewingResult?.type === 'consultant_to_trainee' ? t.qsConsultant.q2 : t.qsTrainee.q2}</span>
+                  <ScoreViewer value={viewingResult?.scoresDetail?.q2} />
                 </div>
-                <div>
-                  <div className="flex justify-between text-xs sm:text-sm mb-1 sm:mb-2"><span className="font-medium text-gray-700">Practical & Clinical Skills</span><span className="font-bold text-gray-900">{viewingResult?.scoresDetail?.q3 || 0}%</span></div>
-                  <input type="range" min="0" max="100" value={viewingResult?.scoresDetail?.q3 || 0} readOnly className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-lg appearance-none accent-blue-600" />
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-gray-50 rounded-xl">
+                  <span className="text-xs sm:text-sm font-medium text-gray-700">{viewingResult?.type === 'consultant_to_trainee' ? t.qsConsultant.q3 : t.qsTrainee.q3}</span>
+                  <ScoreViewer value={viewingResult?.scoresDetail?.q3} />
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                <button onClick={() => setViewingResult(null)} className="w-full px-4 py-2.5 sm:py-3 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 text-sm sm:text-base">Close</button>
-                <button onClick={() => resetEval(viewingResult.id)} className="w-full px-4 py-2.5 sm:py-3 bg-red-50 text-red-600 rounded-xl font-medium hover:bg-red-100 flex items-center justify-center gap-2 text-sm sm:text-base">
+                <button onClick={() => setViewingResult(null)} className="w-full px-4 py-2.5 sm:py-3 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 text-sm sm:text-base transition-colors">Close</button>
+                <button onClick={() => resetEval(viewingResult.id)} className="w-full px-4 py-2.5 sm:py-3 bg-red-50 text-red-600 rounded-xl font-medium hover:bg-red-100 flex items-center justify-center gap-2 text-sm sm:text-base transition-colors">
                   <RotateCcw size={16} /> <span className="truncate">{t.unlockBtn}</span>
                 </button>
               </div>
@@ -492,12 +518,12 @@ export default function App() {
               </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full md:w-auto mt-2 md:mt-0">
-              <button onClick={exportToExcel} className="flex items-center justify-center gap-2 px-4 py-2.5 sm:py-3 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 text-xs sm:text-sm w-full sm:w-auto">
+              <button onClick={exportToExcel} className="flex items-center justify-center gap-2 px-4 py-2.5 sm:py-3 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 text-xs sm:text-sm w-full sm:w-auto transition-colors">
                 <Download size={14} />
                 <span className="truncate">{t.exportBtn}</span>
               </button>
               <input type="file" id="schedule-upload" className="hidden" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} />
-              <label htmlFor="schedule-upload" className="flex items-center justify-center px-4 py-2.5 sm:py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 cursor-pointer text-xs sm:text-sm w-full sm:w-auto">
+              <label htmlFor="schedule-upload" className="flex items-center justify-center px-4 py-2.5 sm:py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 cursor-pointer text-xs sm:text-sm w-full sm:w-auto transition-colors shadow-sm">
                 <span className="truncate">{t.selectBtn}</span>
               </label>
             </div>
@@ -535,7 +561,7 @@ export default function App() {
                   placeholder={t.search} 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className={`w-full py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 ${t.dir === 'rtl' ? 'pr-9 pl-3' : 'pl-9 pr-3'}`}
+                  className={`w-full py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 transition-shadow ${t.dir === 'rtl' ? 'pr-9 pl-3' : 'pl-9 pr-3'}`}
                 />
               </div>
             </div>
@@ -589,6 +615,10 @@ export default function App() {
   const pendingTasks = myTasks.filter(t => t.status === 'Pending');
   const completedTasks = myTasks.filter(t => t.status !== 'Pending');
 
+  const isFormComplete = scores.q1 !== null && scores.q2 !== null && scores.q3 !== null;
+  const currentTotal = (scores.q1 || 0) + (scores.q2 || 0) + (scores.q3 || 0);
+  const currentPercent = isFormComplete ? Math.round((currentTotal / 12) * 100) : 0;
+
   return (
     <div className="min-h-screen bg-gray-50/50 pb-10" dir={t.dir}>
       {renderTopBar()}
@@ -596,33 +626,35 @@ export default function App() {
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" dir="ltr">
           <div className="bg-white rounded-2xl w-full max-w-lg p-5 sm:p-6 shadow-2xl overflow-y-auto max-h-[90vh]">
-            <div className="flex justify-between items-start mb-4 sm:mb-6">
+            <div className="flex justify-between items-start mb-4 sm:mb-6 border-b border-gray-100 pb-4">
               <div className="pr-4">
                 <h2 className="text-lg sm:text-xl font-bold text-gray-900">Evaluate</h2>
-                <p className="text-xs sm:text-sm text-gray-500 break-all">{activeTask?.evaluatee}</p>
+                <p className="text-xs sm:text-sm text-gray-500 break-all mt-1">{activeTask?.evaluatee}</p>
               </div>
-              <div className="text-right shrink-0">
-                <span className="text-2xl sm:text-3xl font-bold text-blue-600">{Math.round((scores.q1 + scores.q2 + scores.q3) / 3)}%</span>
-                <p className="text-[10px] sm:text-xs text-gray-500">Overall Score</p>
+              <div className="text-right shrink-0 bg-blue-50 px-4 py-2 rounded-xl">
+                <span className={`text-2xl sm:text-3xl font-bold ${isFormComplete ? 'text-blue-600' : 'text-gray-300'}`}>
+                  {isFormComplete ? `${currentPercent}%` : '--'}
+                </span>
+                <p className={`text-[10px] sm:text-xs font-medium ${isFormComplete ? 'text-blue-600/80' : 'text-gray-400'}`}>Score</p>
               </div>
             </div>
-            <div className="space-y-4 sm:space-y-6 mb-6 sm:mb-8">
-              <div>
-                <div className="flex justify-between text-xs sm:text-sm mb-1 sm:mb-2"><span className="font-medium text-gray-700">Self-Reflection & Professionalism</span><span className="font-bold text-gray-900">{scores.q1}%</span></div>
-                <input type="range" min="0" max="100" value={scores.q1} onChange={(e) => setScores(p => ({...p, q1: parseInt(e.target.value)}))} className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
+            <div className="space-y-6 sm:space-y-8 mb-6 sm:mb-8">
+              <div className="flex flex-col gap-2">
+                <span className="text-xs sm:text-sm font-medium text-gray-700">{activeTask?.type === 'consultant_to_trainee' ? t.qsConsultant.q1 : t.qsTrainee.q1}</span>
+                <ScoreSelector value={scores.q1} onChange={(v) => setScores(p => ({...p, q1: v}))} />
               </div>
-              <div>
-                <div className="flex justify-between text-xs sm:text-sm mb-1 sm:mb-2"><span className="font-medium text-gray-700">Patient Interaction & Communication</span><span className="font-bold text-gray-900">{scores.q2}%</span></div>
-                <input type="range" min="0" max="100" value={scores.q2} onChange={(e) => setScores(p => ({...p, q2: parseInt(e.target.value)}))} className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
+              <div className="flex flex-col gap-2">
+                <span className="text-xs sm:text-sm font-medium text-gray-700">{activeTask?.type === 'consultant_to_trainee' ? t.qsConsultant.q2 : t.qsTrainee.q2}</span>
+                <ScoreSelector value={scores.q2} onChange={(v) => setScores(p => ({...p, q2: v}))} />
               </div>
-              <div>
-                <div className="flex justify-between text-xs sm:text-sm mb-1 sm:mb-2"><span className="font-medium text-gray-700">Practical & Clinical Skills</span><span className="font-bold text-gray-900">{scores.q3}%</span></div>
-                <input type="range" min="0" max="100" value={scores.q3} onChange={(e) => setScores(p => ({...p, q3: parseInt(e.target.value)}))} className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
+              <div className="flex flex-col gap-2">
+                <span className="text-xs sm:text-sm font-medium text-gray-700">{activeTask?.type === 'consultant_to_trainee' ? t.qsConsultant.q3 : t.qsTrainee.q3}</span>
+                <ScoreSelector value={scores.q3} onChange={(v) => setScores(p => ({...p, q3: v}))} />
               </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-              <button onClick={() => { setShowModal(false); setActiveTask(null); }} className="w-full px-4 py-2.5 sm:py-3 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 text-sm sm:text-base">Cancel</button>
-              <button onClick={submitEval} className="w-full px-4 py-2.5 sm:py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 text-sm sm:text-base">Submit</button>
+              <button onClick={() => { setShowModal(false); setActiveTask(null); setScores({ q1: null, q2: null, q3: null }); }} className="w-full px-4 py-2.5 sm:py-3 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 text-sm sm:text-base transition-colors">Cancel</button>
+              <button onClick={submitEval} disabled={!isFormComplete} className={`w-full px-4 py-2.5 sm:py-3 rounded-xl font-medium text-sm sm:text-base transition-colors shadow-sm ${isFormComplete ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>Submit</button>
             </div>
           </div>
         </div>
@@ -637,25 +669,25 @@ export default function App() {
           {isTrainee && (
             <div className="bg-blue-50 border border-blue-100 p-3 sm:p-4 rounded-xl mb-4 sm:mb-8 flex gap-2 sm:gap-3 text-blue-800 items-start md:items-center">
               <Shield size={16} className="shrink-0 mt-0.5 md:mt-0 sm:w-5 sm:h-5" />
-              <p className="text-[10px] sm:text-sm">Your evaluations of consultants are strictly anonymous.</p>
+              <p className="text-[10px] sm:text-sm font-medium">Your evaluations of consultants are strictly anonymous.</p>
             </div>
           )}
           
           {pendingTasks.length > 0 && <h2 className="text-lg sm:text-2xl font-bold text-gray-900 mb-3 sm:mb-6">{t.pending}</h2>}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6 mb-6 sm:mb-8">
             {pendingTasks.map(task => (
-              <div key={task.id} className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
+              <div key={task.id} className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col hover:border-blue-200 transition-colors">
                 <div className="flex justify-between items-start mb-4 sm:mb-6">
                   <div className="pr-2">
-                    <div className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase mb-0.5 sm:mb-1">{isTrainee ? 'Evaluate Consultant' : 'Trainee'}</div>
+                    <div className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase mb-0.5 sm:mb-1">{task.type === 'trainee_to_consultant' ? 'Evaluate Consultant' : 'Trainee'}</div>
                     <div className="text-sm sm:text-lg font-bold text-gray-900 break-words">{task.evaluatee}</div>
-                    <div className="text-[10px] sm:text-xs text-gray-400 font-mono mt-1">{task.deadline}</div>
+                    <div className="text-[10px] sm:text-xs text-gray-400 font-mono mt-1.5">{task.deadline}</div>
                   </div>
                   <StatusBadge status={task.status} />
                 </div>
                 <div className="mt-auto">
-                  <button onClick={() => { setActiveTask(task); setShowModal(true); }} className="w-full py-2.5 sm:py-3 bg-blue-600 text-white rounded-xl text-sm sm:text-base font-medium hover:bg-blue-700">
-                    <span className="truncate">{isTrainee ? 'Evaluate Anonymously' : 'Evaluate'}</span>
+                  <button onClick={() => { setActiveTask(task); setShowModal(true); }} className="w-full py-2.5 sm:py-3 bg-blue-600 text-white rounded-xl text-sm sm:text-base font-medium hover:bg-blue-700 transition-colors shadow-sm">
+                    <span className="truncate">{task.type === 'trainee_to_consultant' ? 'Evaluate Anonymously' : 'Evaluate'}</span>
                   </button>
                 </div>
               </div>
@@ -668,13 +700,13 @@ export default function App() {
               <div key={task.id} className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col opacity-75">
                 <div className="flex justify-between items-start mb-4 sm:mb-6">
                   <div className="pr-2">
-                    <div className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase mb-0.5 sm:mb-1">{isTrainee ? 'Consultant' : 'Trainee'}</div>
+                    <div className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase mb-0.5 sm:mb-1">{task.type === 'trainee_to_consultant' ? 'Consultant' : 'Trainee'}</div>
                     <div className="text-sm sm:text-lg font-bold text-gray-900 break-words">{task.evaluatee}</div>
                   </div>
                   <StatusBadge status={task.status} />
                 </div>
                 <div className="mt-auto pt-3 sm:pt-4 border-t border-gray-50">
-                  <div className="w-full py-2 text-center text-[10px] sm:text-sm text-gray-400 font-medium bg-gray-50 rounded-xl">
+                  <div className="w-full py-2 text-center text-[10px] sm:text-sm text-gray-500 font-medium bg-gray-50 rounded-xl">
                     {t.submitted} (Score: {task.score}%)
                   </div>
                 </div>
