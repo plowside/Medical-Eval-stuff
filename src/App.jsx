@@ -8,13 +8,13 @@ import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyD-j-1b0Mx5x0vlI4qqYC6lSk5o-SnD_Ps",
-  authDomain: "ngif-9a48c.firebaseapp.com",
-  projectId: "ngif-9a48c",
-  storageBucket: "ngif-9a48c.firebasestorage.app",
-  messagingSenderId: "292484224976",
-  appId: "1:292484224976:web:750c42d46ac29030378bd5",
-  measurementId: "G-G5BGFLLKQF"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 const app = initializeApp(firebaseConfig);
