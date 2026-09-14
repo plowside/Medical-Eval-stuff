@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, writeBatch, doc, updateDoc } from 'firebase/firestore';
+import { getFirestore, collection, onSnapshot, writeBatch, doc, updateDoc, getDocs } from 'firebase/firestore';
 import { Activity, Globe, LogOut, CheckCircle, Clock, AlertCircle, Shield, Upload, Eye, Lock, UserPlus, Search, Download, RotateCcw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
@@ -94,10 +94,10 @@ const translations = {
 
 const StatusBadge = ({ status }) => {
   const styles = { Completed: 'bg-green-100 text-green-700', Pending: 'bg-yellow-100 text-yellow-700', Missed: 'bg-red-100 text-red-700' };
-  const icons = { Completed: <CheckCircle size={14} className="mx-1" />, Pending: <Clock size={14} className="mx-1" />, Missed: <AlertCircle size={14} className="mx-1" /> };
+  const icons = { Completed: <CheckCircle size={14} className="mx-1 shrink-0" />, Pending: <Clock size={14} className="mx-1 shrink-0" />, Missed: <AlertCircle size={14} className="mx-1 shrink-0" /> };
   return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${styles[status]}`}>
-      {icons[status]} {status}
+    <span className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] sm:text-xs font-medium ${styles[status]}`}>
+      {icons[status]} <span className="truncate">{status}</span>
     </span>
   );
 };
@@ -210,6 +210,9 @@ export default function App() {
         const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
 
         const batch = writeBatch(db);
+        const existingDocs = await getDocs(collection(db, 'tasks'));
+        existingDocs.forEach((d) => batch.delete(d.ref));
+        
         let currentConsultant = null;
         let currentDateStr = null;
 
@@ -367,20 +370,20 @@ export default function App() {
   };
 
   const renderTopBar = () => (
-    <div className="flex flex-col md:flex-row justify-between items-center p-4 border-b border-gray-200 bg-white shadow-sm gap-4" dir={t.dir}>
-      <div className="flex items-center gap-3 w-full md:w-auto justify-center md:justify-start">
-        <div className="bg-blue-600 text-white p-2 rounded-lg"><Activity size={24} /></div>
-        <div className="text-center md:text-left">
-          <h1 className="font-bold text-gray-900 text-lg md:text-xl whitespace-nowrap">{t.title}</h1>
-          <p className="text-xs md:text-sm text-gray-500">{currentUser.title} • {currentUser.name}</p>
+    <div className="flex flex-col sm:flex-row justify-between items-center p-4 border-b border-gray-200 bg-white shadow-sm gap-4" dir={t.dir}>
+      <div className="flex items-center gap-3 w-full sm:w-auto justify-center sm:justify-start">
+        <div className="bg-blue-600 text-white p-2 rounded-lg shrink-0"><Activity size={20} /></div>
+        <div className="text-center sm:text-left min-w-0">
+          <h1 className="font-bold text-gray-900 text-base sm:text-lg truncate">{t.title}</h1>
+          <p className="text-xs text-gray-500 truncate">{currentUser.title} • {currentUser.name}</p>
         </div>
       </div>
-      <div className="flex items-center gap-4 w-full md:w-auto justify-center">
-        <button onClick={toggleLang} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm font-medium whitespace-nowrap">
-          <Globe size={18} /><span>{t.langSwitch}</span>
+      <div className="flex items-center justify-center gap-4 w-full sm:w-auto border-t sm:border-t-0 pt-3 sm:pt-0 border-gray-100">
+        <button onClick={toggleLang} className="flex items-center justify-center gap-2 text-gray-600 hover:text-gray-900 text-sm font-medium w-full sm:w-auto">
+          <Globe size={16} /><span>{t.langSwitch}</span>
         </button>
-        <button onClick={handleLogout} className="flex items-center gap-2 text-gray-600 hover:text-red-600 border-l border-gray-300 pl-4 text-sm font-medium transition-colors whitespace-nowrap">
-          <LogOut size={18} /><span>{t.logout}</span>
+        <button onClick={handleLogout} className="flex items-center justify-center gap-2 text-gray-600 hover:text-red-600 border-l border-gray-200 pl-4 text-sm font-medium transition-colors w-full sm:w-auto">
+          <LogOut size={16} /><span>{t.logout}</span>
         </button>
       </div>
     </div>
@@ -392,35 +395,35 @@ export default function App() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4" dir={t.dir}>
         <div className="max-w-md w-full bg-white rounded-3xl shadow-xl overflow-hidden">
-          <div className="bg-blue-600 p-8 text-center text-white">
-            <div className="inline-block bg-white/20 p-4 rounded-full mb-4">
-              {isRegistering ? <UserPlus size={32} /> : <Lock size={32} />}
+          <div className="bg-blue-600 p-6 sm:p-8 text-center text-white">
+            <div className="inline-block bg-white/20 p-3 sm:p-4 rounded-full mb-3 sm:mb-4">
+              {isRegistering ? <UserPlus size={28} /> : <Lock size={28} />}
             </div>
-            <h1 className="text-2xl font-bold mb-2">{isRegistering ? t.registerTitle : t.loginTitle}</h1>
+            <h1 className="text-xl sm:text-2xl font-bold mb-1 sm:mb-2">{isRegistering ? t.registerTitle : t.loginTitle}</h1>
           </div>
-          <div className="p-8">
-            <form onSubmit={handleAuth} className="space-y-5">
-              {loginError && <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm text-center">{loginError}</div>}
+          <div className="p-6 sm:p-8">
+            <form onSubmit={handleAuth} className="space-y-4 sm:space-y-5">
+              {loginError && <div className="p-3 bg-red-50 text-red-600 rounded-lg text-xs sm:text-sm text-center">{loginError}</div>}
               {isRegistering && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t.name}</label>
-                  <input type="text" name="name" required className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none" />
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">{t.name}</label>
+                  <input type="text" name="name" required className="w-full px-3 py-2 sm:px-4 sm:py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none text-sm" />
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t.email}</label>
-                <input type="email" name="email" required className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none" />
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">{t.email}</label>
+                <input type="email" name="email" required className="w-full px-3 py-2 sm:px-4 sm:py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none text-sm" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t.password}</label>
-                <input type="password" name="password" required className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none" />
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">{t.password}</label>
+                <input type="password" name="password" required className="w-full px-3 py-2 sm:px-4 sm:py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-600 outline-none text-sm" />
               </div>
-              <button type="submit" className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-md">
+              <button type="submit" className="w-full py-2.5 sm:py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-md text-sm sm:text-base">
                 {isRegistering ? t.regBtn : t.authBtn}
               </button>
             </form>
-            <div className="mt-6 text-center">
-              <button onClick={() => { setIsRegistering(!isRegistering); setLoginError(''); }} className="text-sm text-blue-600 hover:underline font-medium">
+            <div className="mt-4 sm:mt-6 text-center">
+              <button onClick={() => { setIsRegistering(!isRegistering); setLoginError(''); }} className="text-xs sm:text-sm text-blue-600 hover:underline font-medium">
                 {isRegistering ? t.switchToLogin : t.switchToReg}
               </button>
             </div>
@@ -439,134 +442,138 @@ export default function App() {
     );
 
     return (
-      <div className="min-h-screen bg-gray-50/50" dir={t.dir}>
+      <div className="min-h-screen bg-gray-50/50 pb-10" dir={t.dir}>
         {renderTopBar()}
         
         {viewingResult && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" dir="ltr">
-            <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl overflow-y-auto max-h-screen">
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">Report</h2>
-                  <p className="text-sm text-gray-500">From: {viewingResult?.type === 'trainee_to_consultant' ? viewingResult?.evaluatorEmail.split('@')[0] : viewingResult?.evaluator} <br/>To: {viewingResult?.evaluatee}</p>
+            <div className="bg-white rounded-2xl w-full max-w-lg p-5 sm:p-6 shadow-2xl overflow-y-auto max-h-[90vh]">
+              <div className="flex justify-between items-start mb-4 sm:mb-6">
+                <div className="pr-4">
+                  <h2 className="text-lg sm:text-xl font-bold text-gray-900">Report</h2>
+                  <p className="text-xs sm:text-sm text-gray-500 break-all">From: {viewingResult?.type === 'trainee_to_consultant' ? viewingResult?.evaluatorEmail.split('@')[0] : viewingResult?.evaluator} <br/>To: {viewingResult?.evaluatee}</p>
                 </div>
-                <div className="text-right">
-                  <span className="text-3xl font-bold text-blue-600">{viewingResult?.score}%</span>
-                  <p className="text-xs text-gray-500">Overall Score</p>
-                </div>
-              </div>
-              <div className="space-y-6 mb-8 opacity-80 pointer-events-none">
-                <div>
-                  <div className="flex justify-between text-sm mb-2"><span className="font-medium text-gray-700">Self-Reflection & Professionalism</span><span className="font-bold text-gray-900">{viewingResult?.scoresDetail?.q1 || 0}%</span></div>
-                  <input type="range" min="0" max="100" value={viewingResult?.scoresDetail?.q1 || 0} readOnly className="w-full h-2 bg-gray-200 rounded-lg appearance-none accent-blue-600" />
-                </div>
-                <div>
-                  <div className="flex justify-between text-sm mb-2"><span className="font-medium text-gray-700">Patient Interaction & Communication</span><span className="font-bold text-gray-900">{viewingResult?.scoresDetail?.q2 || 0}%</span></div>
-                  <input type="range" min="0" max="100" value={viewingResult?.scoresDetail?.q2 || 0} readOnly className="w-full h-2 bg-gray-200 rounded-lg appearance-none accent-blue-600" />
-                </div>
-                <div>
-                  <div className="flex justify-between text-sm mb-2"><span className="font-medium text-gray-700">Practical & Clinical Skills</span><span className="font-bold text-gray-900">{viewingResult?.scoresDetail?.q3 || 0}%</span></div>
-                  <input type="range" min="0" max="100" value={viewingResult?.scoresDetail?.q3 || 0} readOnly className="w-full h-2 bg-gray-200 rounded-lg appearance-none accent-blue-600" />
+                <div className="text-right shrink-0">
+                  <span className="text-2xl sm:text-3xl font-bold text-blue-600">{viewingResult?.score}%</span>
+                  <p className="text-[10px] sm:text-xs text-gray-500">Overall Score</p>
                 </div>
               </div>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <button onClick={() => setViewingResult(null)} className="w-full px-4 py-3 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50">Close</button>
-                <button onClick={() => resetEval(viewingResult.id)} className="w-full px-4 py-3 bg-red-50 text-red-600 rounded-xl font-medium hover:bg-red-100 flex items-center justify-center gap-2">
-                  <RotateCcw size={18} /> {t.unlockBtn}
+              <div className="space-y-4 sm:space-y-6 mb-6 sm:mb-8 opacity-80 pointer-events-none">
+                <div>
+                  <div className="flex justify-between text-xs sm:text-sm mb-1 sm:mb-2"><span className="font-medium text-gray-700">Self-Reflection & Professionalism</span><span className="font-bold text-gray-900">{viewingResult?.scoresDetail?.q1 || 0}%</span></div>
+                  <input type="range" min="0" max="100" value={viewingResult?.scoresDetail?.q1 || 0} readOnly className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-lg appearance-none accent-blue-600" />
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs sm:text-sm mb-1 sm:mb-2"><span className="font-medium text-gray-700">Patient Interaction & Communication</span><span className="font-bold text-gray-900">{viewingResult?.scoresDetail?.q2 || 0}%</span></div>
+                  <input type="range" min="0" max="100" value={viewingResult?.scoresDetail?.q2 || 0} readOnly className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-lg appearance-none accent-blue-600" />
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs sm:text-sm mb-1 sm:mb-2"><span className="font-medium text-gray-700">Practical & Clinical Skills</span><span className="font-bold text-gray-900">{viewingResult?.scoresDetail?.q3 || 0}%</span></div>
+                  <input type="range" min="0" max="100" value={viewingResult?.scoresDetail?.q3 || 0} readOnly className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-lg appearance-none accent-blue-600" />
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                <button onClick={() => setViewingResult(null)} className="w-full px-4 py-2.5 sm:py-3 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 text-sm sm:text-base">Close</button>
+                <button onClick={() => resetEval(viewingResult.id)} className="w-full px-4 py-2.5 sm:py-3 bg-red-50 text-red-600 rounded-xl font-medium hover:bg-red-100 flex items-center justify-center gap-2 text-sm sm:text-base">
+                  <RotateCcw size={16} /> <span className="truncate">{t.unlockBtn}</span>
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 md:space-y-8">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="bg-blue-50 p-3 md:p-4 rounded-xl text-blue-600"><Upload size={24} /></div>
+        <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-4 sm:space-y-8">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="bg-blue-50 p-2 sm:p-4 rounded-xl text-blue-600 shrink-0"><Upload size={20} className="sm:w-6 sm:h-6" /></div>
               <div>
-                <h3 className="font-bold text-base md:text-lg text-gray-900">{t.uploadTitle}</h3>
-                <p className="text-xs md:text-sm text-gray-500">{t.excelDesc}</p>
+                <h3 className="font-bold text-sm sm:text-lg text-gray-900">{t.uploadTitle}</h3>
+                <p className="text-[10px] sm:text-sm text-gray-500">{t.excelDesc}</p>
               </div>
             </div>
-            <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-              <button onClick={exportToExcel} className="flex items-center justify-center gap-2 px-6 py-3 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 text-sm whitespace-nowrap">
-                <Download size={16} />
-                {t.exportBtn}
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full md:w-auto mt-2 md:mt-0">
+              <button onClick={exportToExcel} className="flex items-center justify-center gap-2 px-4 py-2.5 sm:py-3 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 text-xs sm:text-sm w-full sm:w-auto">
+                <Download size={14} />
+                <span className="truncate">{t.exportBtn}</span>
               </button>
               <input type="file" id="schedule-upload" className="hidden" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} />
-              <label htmlFor="schedule-upload" className="flex items-center justify-center w-full md:w-auto text-center px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 cursor-pointer text-sm whitespace-nowrap">
-                {t.selectBtn}
+              <label htmlFor="schedule-upload" className="flex items-center justify-center px-4 py-2.5 sm:py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 cursor-pointer text-xs sm:text-sm w-full sm:w-auto">
+                <span className="truncate">{t.selectBtn}</span>
               </label>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-            <div className="bg-blue-50 p-4 md:p-6 rounded-2xl">
-              <div className="text-2xl md:text-4xl font-bold text-blue-700 mb-1">{tasks.length}</div>
-              <div className="text-blue-600/80 text-xs md:text-sm font-medium">{t.total}</div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6">
+            <div className="bg-blue-50 p-3 sm:p-6 rounded-xl sm:rounded-2xl">
+              <div className="text-xl sm:text-4xl font-bold text-blue-700 mb-0.5 sm:mb-1">{tasks.length}</div>
+              <div className="text-blue-600/80 text-[10px] sm:text-sm font-medium truncate">{t.total}</div>
             </div>
-            <div className="bg-green-50 p-4 md:p-6 rounded-2xl">
-              <div className="text-2xl md:text-4xl font-bold text-green-700 mb-1">{tasks.filter(x => x.status === 'Completed').length}</div>
-              <div className="text-green-600/80 text-xs md:text-sm font-medium">{t.completed}</div>
+            <div className="bg-green-50 p-3 sm:p-6 rounded-xl sm:rounded-2xl">
+              <div className="text-xl sm:text-4xl font-bold text-green-700 mb-0.5 sm:mb-1">{tasks.filter(x => x.status === 'Completed').length}</div>
+              <div className="text-green-600/80 text-[10px] sm:text-sm font-medium truncate">{t.completed}</div>
             </div>
-            <div className="bg-yellow-50 p-4 md:p-6 rounded-2xl">
-              <div className="text-2xl md:text-4xl font-bold text-yellow-700 mb-1">{tasks.filter(x => x.status === 'Pending').length}</div>
-              <div className="text-yellow-600/80 text-xs md:text-sm font-medium">{t.pending}</div>
+            <div className="bg-yellow-50 p-3 sm:p-6 rounded-xl sm:rounded-2xl">
+              <div className="text-xl sm:text-4xl font-bold text-yellow-700 mb-0.5 sm:mb-1">{tasks.filter(x => x.status === 'Pending').length}</div>
+              <div className="text-yellow-600/80 text-[10px] sm:text-sm font-medium truncate">{t.pending}</div>
             </div>
-            <div className="bg-red-50 p-4 md:p-6 rounded-2xl">
-              <div className="text-2xl md:text-4xl font-bold text-red-700 mb-1">{tasks.filter(x => x.status === 'Missed').length}</div>
-              <div className="text-red-600/80 text-xs md:text-sm font-medium">{t.missed}</div>
+            <div className="bg-red-50 p-3 sm:p-6 rounded-xl sm:rounded-2xl">
+              <div className="text-xl sm:text-4xl font-bold text-red-700 mb-0.5 sm:mb-1">{tasks.filter(x => x.status === 'Missed').length}</div>
+              <div className="text-red-600/80 text-[10px] sm:text-sm font-medium truncate">{t.missed}</div>
             </div>
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="p-4 md:p-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="p-4 sm:p-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="flex items-center gap-2">
-                <Activity size={20} className="text-blue-600" />
-                <h3 className="font-bold text-base md:text-lg">{t.tracker}</h3>
+                <Activity size={18} className="text-blue-600 sm:w-5 sm:h-5" />
+                <h3 className="font-bold text-sm sm:text-lg">{t.tracker}</h3>
               </div>
-              <div className="relative w-full md:w-64">
-                <Search size={16} className={`absolute top-1/2 -translate-y-1/2 text-gray-400 ${t.dir === 'rtl' ? 'right-3' : 'left-3'}`} />
+              <div className="relative w-full sm:w-64">
+                <Search size={14} className={`absolute top-1/2 -translate-y-1/2 text-gray-400 sm:w-4 sm:h-4 ${t.dir === 'rtl' ? 'right-3' : 'left-3'}`} />
                 <input 
                   type="text" 
                   placeholder={t.search} 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className={`w-full py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 ${t.dir === 'rtl' ? 'pr-10 pl-3' : 'pl-10 pr-3'}`}
+                  className={`w-full py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 ${t.dir === 'rtl' ? 'pr-9 pl-3' : 'pl-9 pr-3'}`}
                 />
               </div>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[600px]" dir={t.dir}>
+              <table className="w-full text-left border-collapse min-w-[500px]" dir={t.dir}>
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/50">
-                    <th className="p-4 text-xs md:text-sm font-bold text-gray-700">{t.evaluator}</th>
-                    <th className="p-4 text-xs md:text-sm font-bold text-gray-700">{t.evaluatee}</th>
-                    <th className="p-4 text-xs md:text-sm font-bold text-gray-700">{t.status}</th>
-                    <th className="p-4 text-xs md:text-sm font-bold text-gray-700">{t.deadline}</th>
-                    <th className="p-4 text-xs md:text-sm font-bold text-gray-700">{t.actions}</th>
+                    <th className="p-3 sm:p-4 text-[10px] sm:text-sm font-bold text-gray-700">{t.evaluator}</th>
+                    <th className="p-3 sm:p-4 text-[10px] sm:text-sm font-bold text-gray-700">{t.evaluatee}</th>
+                    <th className="p-3 sm:p-4 text-[10px] sm:text-sm font-bold text-gray-700">{t.status}</th>
+                    <th className="p-3 sm:p-4 text-[10px] sm:text-sm font-bold text-gray-700">{t.deadline}</th>
+                    <th className="p-3 sm:p-4 text-[10px] sm:text-sm font-bold text-gray-700">{t.actions}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredTasks.map((task) => (
-                    <tr key={task.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                      <td className="p-4 text-xs md:text-sm text-gray-600 font-medium">
-                        {task.type === 'trainee_to_consultant' ? `${task.evaluatorEmail.split('@')[0]} (Anon)` : task.evaluator}
-                      </td>
-                      <td className="p-4 text-xs md:text-sm text-gray-600">{task.evaluatee}</td>
-                      <td className="p-4"><StatusBadge status={task.status} /></td>
-                      <td className="p-4 text-xs text-gray-400 font-mono whitespace-nowrap">{task.deadline}</td>
-                      <td className="p-4">
-                        <button 
-                          onClick={() => setViewingResult(task)}
-                          disabled={task.status !== 'Completed'} 
-                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-colors ${task.status === 'Completed' ? 'text-blue-600 hover:bg-blue-50' : 'text-gray-300 cursor-not-allowed'}`}
-                        >
-                          <Eye size={16} /> {t.view}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredTasks.length === 0 ? (
+                    <tr><td colSpan="5" className="p-4 text-center text-gray-400 text-sm">No tasks found.</td></tr>
+                  ) : (
+                    filteredTasks.map((task) => (
+                      <tr key={task.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                        <td className="p-3 sm:p-4 text-xs sm:text-sm text-gray-600 font-medium">
+                          {task.type === 'trainee_to_consultant' ? `${task.evaluatorEmail.split('@')[0]} (Anon)` : task.evaluator}
+                        </td>
+                        <td className="p-3 sm:p-4 text-xs sm:text-sm text-gray-600">{task.evaluatee}</td>
+                        <td className="p-3 sm:p-4"><StatusBadge status={task.status} /></td>
+                        <td className="p-3 sm:p-4 text-[10px] sm:text-xs text-gray-400 font-mono whitespace-nowrap">{task.deadline}</td>
+                        <td className="p-3 sm:p-4">
+                          <button 
+                            onClick={() => setViewingResult(task)}
+                            disabled={task.status !== 'Completed'} 
+                            className={`inline-flex items-center justify-center gap-1 p-1.5 sm:px-3 sm:py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors ${task.status === 'Completed' ? 'text-blue-600 hover:bg-blue-50' : 'text-gray-300 cursor-not-allowed'}`}
+                          >
+                            <Eye size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">{t.view}</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -583,91 +590,92 @@ export default function App() {
   const completedTasks = myTasks.filter(t => t.status !== 'Pending');
 
   return (
-    <div className="min-h-screen bg-gray-50/50" dir={t.dir}>
+    <div className="min-h-screen bg-gray-50/50 pb-10" dir={t.dir}>
       {renderTopBar()}
       
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" dir="ltr">
-          <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl overflow-y-auto max-h-[90vh]">
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">Evaluate</h2>
-                <p className="text-sm text-gray-500">{activeTask?.evaluatee}</p>
+          <div className="bg-white rounded-2xl w-full max-w-lg p-5 sm:p-6 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div className="flex justify-between items-start mb-4 sm:mb-6">
+              <div className="pr-4">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900">Evaluate</h2>
+                <p className="text-xs sm:text-sm text-gray-500 break-all">{activeTask?.evaluatee}</p>
               </div>
-              <div className="text-right">
-                <span className="text-3xl font-bold text-blue-600">{Math.round((scores.q1 + scores.q2 + scores.q3) / 3)}%</span>
-                <p className="text-xs text-gray-500">Overall Score</p>
-              </div>
-            </div>
-            <div className="space-y-6 mb-8">
-              <div>
-                <div className="flex justify-between text-sm mb-2"><span className="font-medium text-gray-700">Self-Reflection & Professionalism</span><span className="font-bold text-gray-900">{scores.q1}%</span></div>
-                <input type="range" min="0" max="100" value={scores.q1} onChange={(e) => setScores(p => ({...p, q1: parseInt(e.target.value)}))} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
-              </div>
-              <div>
-                <div className="flex justify-between text-sm mb-2"><span className="font-medium text-gray-700">Patient Interaction & Communication</span><span className="font-bold text-gray-900">{scores.q2}%</span></div>
-                <input type="range" min="0" max="100" value={scores.q2} onChange={(e) => setScores(p => ({...p, q2: parseInt(e.target.value)}))} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
-              </div>
-              <div>
-                <div className="flex justify-between text-sm mb-2"><span className="font-medium text-gray-700">Practical & Clinical Skills</span><span className="font-bold text-gray-900">{scores.q3}%</span></div>
-                <input type="range" min="0" max="100" value={scores.q3} onChange={(e) => setScores(p => ({...p, q3: parseInt(e.target.value)}))} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
+              <div className="text-right shrink-0">
+                <span className="text-2xl sm:text-3xl font-bold text-blue-600">{Math.round((scores.q1 + scores.q2 + scores.q3) / 3)}%</span>
+                <p className="text-[10px] sm:text-xs text-gray-500">Overall Score</p>
               </div>
             </div>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <button onClick={() => { setShowModal(false); setActiveTask(null); }} className="w-full px-4 py-3 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50">Cancel</button>
-              <button onClick={submitEval} className="w-full px-4 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700">Submit</button>
+            <div className="space-y-4 sm:space-y-6 mb-6 sm:mb-8">
+              <div>
+                <div className="flex justify-between text-xs sm:text-sm mb-1 sm:mb-2"><span className="font-medium text-gray-700">Self-Reflection & Professionalism</span><span className="font-bold text-gray-900">{scores.q1}%</span></div>
+                <input type="range" min="0" max="100" value={scores.q1} onChange={(e) => setScores(p => ({...p, q1: parseInt(e.target.value)}))} className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
+              </div>
+              <div>
+                <div className="flex justify-between text-xs sm:text-sm mb-1 sm:mb-2"><span className="font-medium text-gray-700">Patient Interaction & Communication</span><span className="font-bold text-gray-900">{scores.q2}%</span></div>
+                <input type="range" min="0" max="100" value={scores.q2} onChange={(e) => setScores(p => ({...p, q2: parseInt(e.target.value)}))} className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
+              </div>
+              <div>
+                <div className="flex justify-between text-xs sm:text-sm mb-1 sm:mb-2"><span className="font-medium text-gray-700">Practical & Clinical Skills</span><span className="font-bold text-gray-900">{scores.q3}%</span></div>
+                <input type="range" min="0" max="100" value={scores.q3} onChange={(e) => setScores(p => ({...p, q3: parseInt(e.target.value)}))} className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+              <button onClick={() => { setShowModal(false); setActiveTask(null); }} className="w-full px-4 py-2.5 sm:py-3 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 text-sm sm:text-base">Cancel</button>
+              <button onClick={submitEval} className="w-full px-4 py-2.5 sm:py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 text-sm sm:text-base">Submit</button>
             </div>
           </div>
         </div>
       )}
 
       {(!isConsultant && !isTrainee) ? (
-        <div className="p-8 max-w-7xl mx-auto text-center mt-20">
-          <h2 className="text-xl md:text-2xl font-bold text-gray-500">{t.noTasks}</h2>
+        <div className="p-6 sm:p-8 max-w-7xl mx-auto text-center mt-10 sm:mt-20">
+          <h2 className="text-lg sm:text-2xl font-bold text-gray-500">{t.noTasks}</h2>
         </div>
       ) : (
-        <div className="p-4 md:p-8 max-w-7xl mx-auto">
+        <div className="p-4 sm:p-8 max-w-7xl mx-auto">
           {isTrainee && (
-            <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl mb-6 md:mb-8 flex gap-3 text-blue-800 items-start md:items-center">
-              <Shield size={20} className="shrink-0 mt-0.5 md:mt-0" />
-              <p className="text-xs md:text-sm">Your evaluations of consultants are strictly anonymous.</p>
+            <div className="bg-blue-50 border border-blue-100 p-3 sm:p-4 rounded-xl mb-4 sm:mb-8 flex gap-2 sm:gap-3 text-blue-800 items-start md:items-center">
+              <Shield size={16} className="shrink-0 mt-0.5 md:mt-0 sm:w-5 sm:h-5" />
+              <p className="text-[10px] sm:text-sm">Your evaluations of consultants are strictly anonymous.</p>
             </div>
           )}
           
-          {pendingTasks.length > 0 && <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-4 md:mb-6">{t.pending}</h2>}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-8">
+          {pendingTasks.length > 0 && <h2 className="text-lg sm:text-2xl font-bold text-gray-900 mb-3 sm:mb-6">{t.pending}</h2>}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6 mb-6 sm:mb-8">
             {pendingTasks.map(task => (
-              <div key={task.id} className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
-                <div className="flex justify-between items-start mb-6">
-                  <div>
-                    <div className="text-xs font-bold text-gray-400 uppercase mb-1">{isTrainee ? 'Evaluate Consultant' : 'Trainee'}</div>
-                    <div className="text-base md:text-lg font-bold text-gray-900 line-clamp-1">{task.evaluatee}</div>
+              <div key={task.id} className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
+                <div className="flex justify-between items-start mb-4 sm:mb-6">
+                  <div className="pr-2">
+                    <div className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase mb-0.5 sm:mb-1">{isTrainee ? 'Evaluate Consultant' : 'Trainee'}</div>
+                    <div className="text-sm sm:text-lg font-bold text-gray-900 break-words">{task.evaluatee}</div>
+                    <div className="text-[10px] sm:text-xs text-gray-400 font-mono mt-1">{task.deadline}</div>
                   </div>
                   <StatusBadge status={task.status} />
                 </div>
                 <div className="mt-auto">
-                  <button onClick={() => { setActiveTask(task); setShowModal(true); }} className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm md:text-base font-medium hover:bg-blue-700">
-                    {isTrainee ? 'Evaluate Anonymously' : 'Evaluate'}
+                  <button onClick={() => { setActiveTask(task); setShowModal(true); }} className="w-full py-2.5 sm:py-3 bg-blue-600 text-white rounded-xl text-sm sm:text-base font-medium hover:bg-blue-700">
+                    <span className="truncate">{isTrainee ? 'Evaluate Anonymously' : 'Evaluate'}</span>
                   </button>
                 </div>
               </div>
             ))}
           </div>
 
-          {completedTasks.length > 0 && <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-4 md:mb-6">{t.completed}</h2>}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+          {completedTasks.length > 0 && <h2 className="text-lg sm:text-2xl font-bold text-gray-900 mb-3 sm:mb-6">{t.completed}</h2>}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
             {completedTasks.map(task => (
-              <div key={task.id} className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
-                <div className="flex justify-between items-start mb-6">
-                  <div>
-                    <div className="text-xs font-bold text-gray-400 uppercase mb-1">{isTrainee ? 'Consultant' : 'Trainee'}</div>
-                    <div className="text-base md:text-lg font-bold text-gray-900 line-clamp-1">{task.evaluatee}</div>
+              <div key={task.id} className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col opacity-75">
+                <div className="flex justify-between items-start mb-4 sm:mb-6">
+                  <div className="pr-2">
+                    <div className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase mb-0.5 sm:mb-1">{isTrainee ? 'Consultant' : 'Trainee'}</div>
+                    <div className="text-sm sm:text-lg font-bold text-gray-900 break-words">{task.evaluatee}</div>
                   </div>
                   <StatusBadge status={task.status} />
                 </div>
-                <div className="mt-auto pt-4 border-t border-gray-50">
-                  <div className="w-full py-2 text-center text-xs md:text-sm text-gray-400 font-medium bg-gray-50 rounded-xl">
-                    {t.submitted}
+                <div className="mt-auto pt-3 sm:pt-4 border-t border-gray-50">
+                  <div className="w-full py-2 text-center text-[10px] sm:text-sm text-gray-400 font-medium bg-gray-50 rounded-xl">
+                    {t.submitted} (Score: {task.score}%)
                   </div>
                 </div>
               </div>
