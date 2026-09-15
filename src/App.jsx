@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, writeBatch, doc, updateDoc } from 'firebase/firestore';
+import { getFirestore, collection, onSnapshot, writeBatch, doc, updateDoc, getDocs } from 'firebase/firestore';
 import { Activity, Globe, LogOut, CheckCircle, Clock, AlertCircle, Shield, Upload, Eye, Lock, UserPlus, Search, Download, RotateCcw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
@@ -55,8 +55,37 @@ const translations = {
     noTasks: 'No active evaluations assigned to your email.',
     unlockBtn: 'Unlock & Reset',
     dir: 'ltr',
-    qsConsultant: { q1: 'Q1: Reports & Results', q2: 'Q2: Emergencies & Communication', q3: 'Q3: Knowledge & Productivity' },
-    qsTrainee: { q1: 'Q1: Mentorship & Guidance', q2: 'Q2: Communication & Respect', q3: 'Q3: Clinical Teaching Quality' }
+    qsConsultant: { 
+      q1: 'Q1: Reporting & Finding Detection', 
+      q2: 'Q2: Emergency Handling & Communication', 
+      q3: 'Q3: Knowledge & Case Productivity',
+      q1_desc: {
+        4: 'Accurately identifies all key findings, no missing',
+        3: 'Identifies most key findings; minor, non-critical missing',
+        2: 'Frequently misses key findings; needs correction',
+        1: 'Major errors or omissions that could affect patient care'
+      },
+      q2_desc: {
+        4: 'Manages emergencies independently; fast, clear communication',
+        3: 'Handles cases adequately; occasional light guidance needed',
+        2: 'Delayed or unclear communication; needs frequent supervision',
+        1: 'Unable to properly manage or communicate emergency cases'
+      },
+      q3_desc: {
+        4: 'Knowledge and case volume exceed expectations for level',
+        3: 'Matches the expected level of knowledge and productivity',
+        2: 'Below the expected level; improvement needed',
+        1: 'Significantly below the expected level for training stage'
+      }
+    },
+    qsTrainee: { 
+      q1: 'Q1: Mentorship & Guidance', 
+      q2: 'Q2: Communication & Respect', 
+      q3: 'Q3: Clinical Teaching Quality',
+      q1_desc: { 4: 'Excellent', 3: 'Good', 2: 'Fair', 1: 'Poor' },
+      q2_desc: { 4: 'Excellent', 3: 'Good', 2: 'Fair', 1: 'Poor' },
+      q3_desc: { 4: 'Excellent', 3: 'Good', 2: 'Fair', 1: 'Poor' }
+    }
   },
   ar: {
     title: 'نظام التقييم الطبي',
@@ -91,8 +120,37 @@ const translations = {
     noTasks: 'لا توجد تقييمات نشطة مخصصة لبريدك.',
     unlockBtn: 'إلغاء القفل وإعادة الضبط',
     dir: 'rtl',
-    qsConsultant: { q1: 'س1: التقارير والنتائج', q2: 'س2: حالات الطوارئ والتواصل', q3: 'س3: المعرفة والإنتاجية' },
-    qsTrainee: { q1: 'س1: التوجيه والإرشاد', q2: 'س2: التواصل والاحترام', q3: 'س3: جودة التدريب السريري' }
+    qsConsultant: { 
+      q1: 'س1: التقارير واكتشاف النتائج', 
+      q2: 'س2: التعامل مع الطوارئ والتواصل', 
+      q3: 'س3: المعرفة وإنتاجية الحالات',
+      q1_desc: {
+        4: 'يحدد جميع النتائج الرئيسية بدقة، لا يوجد نقص',
+        3: 'يحدد معظم النتائج الرئيسية؛ نقص بسيط غير حرج',
+        2: 'يغفل النتائج الرئيسية بشكل متكرر؛ يحتاج إلى تصحيح',
+        1: 'أخطاء أو إغفالات كبيرة قد تؤثر على رعاية المريض'
+      },
+      q2_desc: {
+        4: 'يدير حالات الطوارئ بشكل مستقل؛ تواصل سريع وواضح',
+        3: 'يتعامل مع الحالات بشكل مناسب؛ يحتاج توجيه خفيف أحياناً',
+        2: 'تواصل متأخر أو غير واضح؛ يحتاج إشراف متكرر',
+        1: 'غير قادر على إدارة أو التواصل في حالات الطوارئ بشكل صحيح'
+      },
+      q3_desc: {
+        4: 'المعرفة وحجم الحالات يتجاوزان التوقعات للمستوى',
+        3: 'يطابق المستوى المتوقع من المعرفة والإنتاجية',
+        2: 'أقل من المستوى المتوقع؛ يحتاج إلى تحسين',
+        1: 'أقل بكثير من المستوى المتوقع لمرحلة التدريب'
+      }
+    },
+    qsTrainee: { 
+      q1: 'س1: التوجيه والإرشاد', 
+      q2: 'س2: التواصل والاحترام', 
+      q3: 'س3: جودة التدريب السريري',
+      q1_desc: { 4: 'ممتاز', 3: 'جيد', 2: 'مقبول', 1: 'ضعيف' },
+      q2_desc: { 4: 'ممتاز', 3: 'جيد', 2: 'مقبول', 1: 'ضعيف' },
+      q3_desc: { 4: 'ممتاز', 3: 'جيد', 2: 'مقبول', 1: 'ضعيف' }
+    }
   }
 };
 
@@ -106,27 +164,41 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-const ScoreSelector = ({ value, onChange }) => (
-  <div className="flex gap-2 sm:gap-3 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-start">
-    {[1, 2, 3, 4].map(v => (
-      <button
-        key={v}
-        onClick={() => onChange(v)}
-        className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl text-sm sm:text-base font-bold transition-all shadow-sm ${value === v ? 'bg-blue-600 text-white ring-2 ring-blue-600 ring-offset-1' : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'}`}
-      >
-        {v}
-      </button>
-    ))}
+const ScoreSelector = ({ value, onChange, descriptions }) => (
+  <div className="flex flex-col gap-2 w-full mt-2 sm:mt-0">
+    <div className="flex gap-2 sm:gap-3 w-full sm:w-auto justify-between sm:justify-start">
+      {[1, 2, 3, 4].map(v => (
+        <button
+          key={v}
+          onClick={() => onChange(v)}
+          className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl text-sm sm:text-base font-bold transition-all shadow-sm ${value === v ? 'bg-blue-600 text-white ring-2 ring-blue-600 ring-offset-1' : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'}`}
+        >
+          {v}
+        </button>
+      ))}
+    </div>
+    {value && descriptions && (
+      <div className="text-xs sm:text-sm text-blue-800 bg-blue-50 p-2 sm:p-3 rounded-lg border border-blue-100 leading-relaxed">
+        <span className="font-bold mr-1">{value}:</span> {descriptions[value]}
+      </div>
+    )}
   </div>
 );
 
-const ScoreViewer = ({ value }) => (
-  <div className="flex gap-2 sm:gap-3 w-full sm:w-auto mt-2 sm:mt-0 justify-between sm:justify-start pointer-events-none">
-    {[1, 2, 3, 4].map(v => (
-      <div key={v} className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-sm sm:text-base font-bold ${value === v ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-50 text-gray-300 border border-gray-100'}`}>
-        {v}
+const ScoreViewer = ({ value, descriptions }) => (
+  <div className="flex flex-col gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+    <div className="flex gap-2 sm:gap-3 justify-between sm:justify-start pointer-events-none">
+      {[1, 2, 3, 4].map(v => (
+        <div key={v} className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-sm sm:text-base font-bold ${value === v ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-50 text-gray-300 border border-gray-100'}`}>
+          {v}
+        </div>
+      ))}
+    </div>
+    {value && descriptions && (
+      <div className="text-xs sm:text-sm text-gray-600 bg-gray-50 p-2 sm:p-3 rounded-lg border border-gray-200 mt-1 leading-relaxed">
+        <span className="font-bold mr-1">{value}:</span> {descriptions[value]}
       </div>
-    ))}
+    )}
   </div>
 );
 
@@ -238,6 +310,9 @@ export default function App() {
         const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
 
         const batch = writeBatch(db);
+        const existingDocs = await getDocs(collection(db, 'tasks'));
+        existingDocs.forEach((d) => batch.delete(d.ref));
+        
         let currentConsultant = null;
         let currentDateStr = null;
 
@@ -473,7 +548,7 @@ export default function App() {
         
         {viewingResult && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" dir="ltr">
-            <div className="bg-white rounded-2xl w-full max-w-lg p-5 sm:p-6 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div className="bg-white rounded-2xl w-full max-w-lg p-5 sm:p-6 shadow-2xl overflow-y-auto max-h-screen">
               <div className="flex justify-between items-start mb-4 sm:mb-6 border-b border-gray-100 pb-4">
                 <div className="pr-4">
                   <h2 className="text-lg sm:text-xl font-bold text-gray-900">Report Details</h2>
@@ -484,23 +559,23 @@ export default function App() {
                   <p className="text-[10px] sm:text-xs text-blue-600/80 font-medium">Overall Score</p>
                 </div>
               </div>
-              <div className="space-y-4 sm:space-y-5 mb-6 sm:mb-8">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-gray-50 rounded-xl">
+              <div className="space-y-6 sm:space-y-8 mb-6 sm:mb-8 opacity-90 pointer-events-none">
+                <div className="flex flex-col gap-2">
                   <span className="text-xs sm:text-sm font-medium text-gray-700">{viewingResult?.type === 'consultant_to_trainee' ? t.qsConsultant.q1 : t.qsTrainee.q1}</span>
-                  <ScoreViewer value={viewingResult?.scoresDetail?.q1} />
+                  <ScoreViewer value={viewingResult?.scoresDetail?.q1} descriptions={viewingResult?.type === 'consultant_to_trainee' ? t.qsConsultant.q1_desc : t.qsTrainee.q1_desc} />
                 </div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-gray-50 rounded-xl">
+                <div className="flex flex-col gap-2">
                   <span className="text-xs sm:text-sm font-medium text-gray-700">{viewingResult?.type === 'consultant_to_trainee' ? t.qsConsultant.q2 : t.qsTrainee.q2}</span>
-                  <ScoreViewer value={viewingResult?.scoresDetail?.q2} />
+                  <ScoreViewer value={viewingResult?.scoresDetail?.q2} descriptions={viewingResult?.type === 'consultant_to_trainee' ? t.qsConsultant.q2_desc : t.qsTrainee.q2_desc} />
                 </div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-gray-50 rounded-xl">
+                <div className="flex flex-col gap-2">
                   <span className="text-xs sm:text-sm font-medium text-gray-700">{viewingResult?.type === 'consultant_to_trainee' ? t.qsConsultant.q3 : t.qsTrainee.q3}</span>
-                  <ScoreViewer value={viewingResult?.scoresDetail?.q3} />
+                  <ScoreViewer value={viewingResult?.scoresDetail?.q3} descriptions={viewingResult?.type === 'consultant_to_trainee' ? t.qsConsultant.q3_desc : t.qsTrainee.q3_desc} />
                 </div>
               </div>
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                <button onClick={() => setViewingResult(null)} className="w-full px-4 py-2.5 sm:py-3 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 text-sm sm:text-base transition-colors">Close</button>
-                <button onClick={() => resetEval(viewingResult.id)} className="w-full px-4 py-2.5 sm:py-3 bg-red-50 text-red-600 rounded-xl font-medium hover:bg-red-100 flex items-center justify-center gap-2 text-sm sm:text-base transition-colors">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mt-6">
+                <button onClick={() => setViewingResult(null)} className="w-full px-4 py-2.5 sm:py-3 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 text-sm sm:text-base transition-colors pointer-events-auto">Close</button>
+                <button onClick={() => resetEval(viewingResult.id)} className="w-full px-4 py-2.5 sm:py-3 bg-red-50 text-red-600 rounded-xl font-medium hover:bg-red-100 flex items-center justify-center gap-2 text-sm sm:text-base transition-colors pointer-events-auto">
                   <RotateCcw size={16} /> <span className="truncate">{t.unlockBtn}</span>
                 </button>
               </div>
@@ -641,20 +716,20 @@ export default function App() {
             <div className="space-y-6 sm:space-y-8 mb-6 sm:mb-8">
               <div className="flex flex-col gap-2">
                 <span className="text-xs sm:text-sm font-medium text-gray-700">{activeTask?.type === 'consultant_to_trainee' ? t.qsConsultant.q1 : t.qsTrainee.q1}</span>
-                <ScoreSelector value={scores.q1} onChange={(v) => setScores(p => ({...p, q1: v}))} />
+                <ScoreSelector value={scores.q1} onChange={(v) => setScores(p => ({...p, q1: v}))} descriptions={activeTask?.type === 'consultant_to_trainee' ? t.qsConsultant.q1_desc : t.qsTrainee.q1_desc} />
               </div>
               <div className="flex flex-col gap-2">
                 <span className="text-xs sm:text-sm font-medium text-gray-700">{activeTask?.type === 'consultant_to_trainee' ? t.qsConsultant.q2 : t.qsTrainee.q2}</span>
-                <ScoreSelector value={scores.q2} onChange={(v) => setScores(p => ({...p, q2: v}))} />
+                <ScoreSelector value={scores.q2} onChange={(v) => setScores(p => ({...p, q2: v}))} descriptions={activeTask?.type === 'consultant_to_trainee' ? t.qsConsultant.q2_desc : t.qsTrainee.q2_desc} />
               </div>
               <div className="flex flex-col gap-2">
                 <span className="text-xs sm:text-sm font-medium text-gray-700">{activeTask?.type === 'consultant_to_trainee' ? t.qsConsultant.q3 : t.qsTrainee.q3}</span>
-                <ScoreSelector value={scores.q3} onChange={(v) => setScores(p => ({...p, q3: v}))} />
+                <ScoreSelector value={scores.q3} onChange={(v) => setScores(p => ({...p, q3: v}))} descriptions={activeTask?.type === 'consultant_to_trainee' ? t.qsConsultant.q3_desc : t.qsTrainee.q3_desc} />
               </div>
             </div>
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-              <button onClick={() => { setShowModal(false); setActiveTask(null); setScores({ q1: null, q2: null, q3: null }); }} className="w-full px-4 py-2.5 sm:py-3 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 text-sm sm:text-base transition-colors">Cancel</button>
-              <button onClick={submitEval} disabled={!isFormComplete} className={`w-full px-4 py-2.5 sm:py-3 rounded-xl font-medium text-sm sm:text-base transition-colors shadow-sm ${isFormComplete ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>Submit</button>
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mt-6">
+              <button onClick={() => { setShowModal(false); setActiveTask(null); setScores({ q1: null, q2: null, q3: null }); }} className="w-full px-4 py-2.5 sm:py-3 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 text-sm sm:text-base transition-colors pointer-events-auto">Cancel</button>
+              <button onClick={submitEval} disabled={!isFormComplete} className={`w-full px-4 py-2.5 sm:py-3 rounded-xl font-medium text-sm sm:text-base transition-colors shadow-sm pointer-events-auto ${isFormComplete ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>Submit</button>
             </div>
           </div>
         </div>
